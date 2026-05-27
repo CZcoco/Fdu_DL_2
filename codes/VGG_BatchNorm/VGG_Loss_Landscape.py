@@ -257,14 +257,30 @@ def plot_loss_landscape(landscape_histories, output_path):
     plt.close(fig)
 
 
-def run_single_training(args, model_name, lr, run_name, epochs):
+def build_optimizer(name, parameters, lr, weight_decay):
+    optimizers = {
+        "adam": lambda: torch.optim.Adam(parameters, lr=lr, weight_decay=weight_decay),
+        "adamw": lambda: torch.optim.AdamW(parameters, lr=lr, weight_decay=weight_decay),
+        "sgd": lambda: torch.optim.SGD(parameters, lr=lr, momentum=0.9, weight_decay=weight_decay),
+    }
+    if name not in optimizers:
+        raise ValueError(f"Unknown optimizer '{name}'. Choices: {sorted(optimizers)}")
+    return optimizers[name]()
+
+
+def run_single_training(args, model_name, lr, run_name, epochs, optimizer_name=None):
     device = get_device()
     set_random_seeds(args.seed, str(device))
     train_loader, val_loader = make_loaders(args)
 
     model = build_model(model_name)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=args.weight_decay)
+    opt_name = optimizer_name or args.optimizer
+    optimizer = build_optimizer(opt_name, model.parameters(), lr=lr, weight_decay=args.weight_decay)
+
+    scheduler = None
+    if args.use_cosine_schedule:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     history, best_state, best_val_accuracy = train(
         model=model,
@@ -274,6 +290,7 @@ def run_single_training(args, model_name, lr, run_name, epochs):
         val_loader=val_loader,
         device=device,
         epochs_n=epochs,
+        scheduler=scheduler,
     )
 
     args.models_dir.mkdir(parents=True, exist_ok=True)
@@ -283,8 +300,9 @@ def run_single_training(args, model_name, lr, run_name, epochs):
             "model": model_name,
             "parameters": get_number_of_parameters(model),
             "best_val_accuracy": best_val_accuracy,
+            "optimizer": opt_name,
             "state_dict": best_state,
-            "args": vars(args),
+            "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         },
         checkpoint_path,
     )
@@ -343,15 +361,44 @@ def run_landscape(args):
     return summary
 
 
+def run_optimizer_comparison(args):
+    histories = {}
+    summary = {}
+    optimizers = ["adam", "adamw", "sgd"]
+    model_name = "vgg_a_bn"
+    for opt_name in optimizers:
+        run_name = f"{model_name}_{opt_name}_lr{args.lr:g}_ep{args.epochs}"
+        history, checkpoint_path, best_acc, params = run_single_training(
+            args=args,
+            model_name=model_name,
+            lr=args.lr,
+            run_name=run_name,
+            epochs=args.epochs,
+            optimizer_name=opt_name,
+        )
+        histories[opt_name] = history
+        summary[opt_name] = {
+            "best_val_accuracy": best_acc,
+            "test_error": 1.0 - best_acc,
+            "parameters": params,
+            "checkpoint": str(checkpoint_path),
+        }
+
+    plot_learning_curves(histories, args.figures_dir / "optimizer_comparison.png")
+    return summary
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="PJ2 CIFAR-10 and VGG BatchNorm experiments")
-    parser.add_argument("--mode", choices=["quick", "train", "landscape", "all"], default="quick")
+    parser.add_argument("--mode", choices=["quick", "train", "landscape", "optim", "all"], default="quick")
     parser.add_argument("--models", nargs="+", default=["vgg_a", "vgg_a_bn"])
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--landscape-epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--landscape-lrs", nargs="+", type=float, default=[1e-3, 2e-3, 1e-4, 5e-4])
+    parser.add_argument("--optimizer", choices=["adam", "adamw", "sgd"], default="adam")
+    parser.add_argument("--use-cosine-schedule", action="store_true")
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--label-smoothing", type=float, default=0.0)
     parser.add_argument("--n-items", type=int, default=2048, help="Use -1 for full training set.")
@@ -386,6 +433,9 @@ def main():
 
     if args.mode in ["quick", "train", "all"]:
         summary["training"] = run_comparison(args)
+
+    if args.mode in ["optim", "all"]:
+        summary["optimizer_comparison"] = run_optimizer_comparison(args)
 
     if args.mode in ["landscape", "all"]:
         summary["landscape"] = run_landscape(args)
