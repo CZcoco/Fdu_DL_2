@@ -1,0 +1,37 @@
+{
+  "device": "cuda:0",
+  "epochs": 30,
+  "mode": "arch",
+  "architectures": {
+    "vgg_a": {
+      "best_val_accuracy": 0.8647,
+      "test_error": 0.13529999999999998,
+      "parameters": 9750922,
+      "avg_epoch_time": 8.308167735735575
+    },
+    "vgg_a_bn": {
+      "best_val_accuracy": 0.9005,
+      "test_error": 0.09950000000000003,
+      "parameters": 9756426,
+      "avg_epoch_time": 7.70567376613617
+    },
+    "vgg_a_dropout": {
+      "best_val_accuracy": 0.8603,
+      "test_error": 0.13970000000000005,
+      "parameters": 9750922,
+      "avg_epoch_time": 7.543516580263773
+    },
+    "vgg_a_light": {
+      "best_val_accuracy": 0.7545,
+      "test_error": 0.24550000000000005,
+      "parameters": 285162,
+      "avg_epoch_time": 7.5352847894032795
+    },
+    "resnet_small": {
+      "best_val_accuracy": 0.9303,
+      "test_error": 0.06969999999999998,
+      "parameters": 11173962,
+      "avg_epoch_time": 10.139267841974894
+    }
+  }
+}

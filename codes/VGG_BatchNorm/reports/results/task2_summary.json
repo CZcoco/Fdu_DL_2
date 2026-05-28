@@ -1,0 +1,23 @@
+{
+  "device": "cuda:0",
+  "epochs": 20,
+  "performance": {
+    "VGG-A (lr=1e-4)": {
+      "best_val_accuracy": 0.7831
+    },
+    "VGG-A + BN (lr=1e-3)": {
+      "best_val_accuracy": 0.8934
+    }
+  },
+  "landscape": "completed",
+  "gradient_analysis": {
+    "VGG-A": {
+      "avg_grad_pred": 33.74085473829235,
+      "avg_beta": 3374.085473829235
+    },
+    "VGG-A + BN": {
+      "avg_grad_pred": 18.628734758440547,
+      "avg_beta": 1862.8734758440548
+    }
+  }
+}

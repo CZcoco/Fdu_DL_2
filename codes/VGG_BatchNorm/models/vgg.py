@@ -1,5 +1,5 @@
 """
-VGG
+VGG model variants for CIFAR-10
 """
 import sys
 from pathlib import Path
@@ -12,70 +12,60 @@ if __package__ is None or __package__ == "":
 
 from utils.nn import init_weights_
 
-# ## Models implementation
+
 def get_number_of_parameters(model):
     parameters_n = 0
     for parameter in model.parameters():
         parameters_n += np.prod(parameter.shape).item()
-
     return parameters_n
 
 
+def get_activation(name):
+    activations = {
+        "relu": nn.ReLU,
+        "leaky_relu": nn.LeakyReLU,
+        "elu": nn.ELU,
+    }
+    if name not in activations:
+        raise ValueError(f"Unknown activation '{name}'. Choices: {sorted(activations)}")
+    return activations[name]
+
+
 class VGG_A(nn.Module):
-    """VGG_A model
+    """VGG_A model (32x32 input)"""
 
-    size of Linear layers is smaller since input assumed to be 32x32x3, instead of
-    224x224x3
-    """
-
-    def __init__(self, inp_ch=3, num_classes=10, init_weights=True):
+    def __init__(self, inp_ch=3, num_classes=10, init_weights=True, activation="relu"):
         super().__init__()
+        Act = get_activation(activation)
 
         self.features = nn.Sequential(
-            # stage 1
-            nn.Conv2d(in_channels=inp_ch, out_channels=64, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 2
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 3
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 4
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage5
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+            nn.Conv2d(inp_ch, 64, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(64, 128, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(128, 256, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(256, 512, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+        )
 
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 1 * 1, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, num_classes))
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Linear(512, num_classes),
+        )
 
         if init_weights:
             self._init_weights()
 
     def forward(self, x):
         x = self.features(x)
-        x = self.classifier(x.view(-1, 512 * 1 * 1))
+        x = self.classifier(x.view(-1, 512))
         return x
 
     def _init_weights(self):
@@ -84,64 +74,40 @@ class VGG_A(nn.Module):
 
 
 class VGG_A_BatchNorm(nn.Module):
-    """VGG_A with BatchNorm2d after every convolutional layer."""
+    """VGG_A with BatchNorm2d after every conv layer."""
 
-    def __init__(self, inp_ch=3, num_classes=10, init_weights=True):
+    def __init__(self, inp_ch=3, num_classes=10, init_weights=True, activation="relu"):
         super().__init__()
+        Act = get_activation(activation)
 
         self.features = nn.Sequential(
-            # stage 1
-            nn.Conv2d(in_channels=inp_ch, out_channels=64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 2
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 3
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 4
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-
-            # stage 5
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+            nn.Conv2d(inp_ch, 64, 3, padding=1), nn.BatchNorm2d(64), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(128, 256, 3, padding=1), nn.BatchNorm2d(256), Act(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1), nn.BatchNorm2d(256), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(256, 512, 3, padding=1), nn.BatchNorm2d(512), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), nn.BatchNorm2d(512), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+        )
 
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 1 * 1, 512),
-            nn.ReLU(True),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Linear(512, num_classes))
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Linear(512, num_classes),
+        )
 
         if init_weights:
             self._init_weights()
 
     def forward(self, x):
         x = self.features(x)
-        x = self.classifier(x.view(-1, 512 * 1 * 1))
+        x = self.classifier(x.view(-1, 512))
         return x
 
     def _init_weights(self):
@@ -150,110 +116,146 @@ class VGG_A_BatchNorm(nn.Module):
 
 
 class VGG_A_Light(nn.Module):
-    def __init__(self, inp_ch=3, num_classes=10):
+    """Lightweight 2-stage VGG variant."""
+
+    def __init__(self, inp_ch=3, num_classes=10, activation="relu"):
         super().__init__()
+        Act = get_activation(activation)
 
-        self.stage1 = nn.Sequential(
-            nn.Conv2d(in_channels=inp_ch, out_channels=16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+        self.features = nn.Sequential(
+            nn.Conv2d(inp_ch, 16, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(16, 32, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+        )
 
-        self.stage2 = nn.Sequential(
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        '''
-        self.stage3 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage4 = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage5 = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-        '''
         self.classifier = nn.Sequential(
-            nn.Linear(32 * 8 * 8, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_classes))
+            nn.Linear(32 * 8 * 8, 128), Act(inplace=True),
+            nn.Linear(128, 128), Act(inplace=True),
+            nn.Linear(128, num_classes),
+        )
 
     def forward(self, x):
-        x = self.stage1(x)
-        x = self.stage2(x)
-        # x = self.stage3(x)
-        # x = self.stage4(x)
-        # x = self.stage5(x)
+        x = self.features(x)
         x = self.classifier(x.view(-1, 32 * 8 * 8))
         return x
 
 
 class VGG_A_Dropout(nn.Module):
-    def __init__(self, inp_ch=3, num_classes=10):
+    """VGG_A with Dropout in classifier."""
+
+    def __init__(self, inp_ch=3, num_classes=10, init_weights=True, activation="relu"):
         super().__init__()
+        Act = get_activation(activation)
 
-        self.stage1 = nn.Sequential(
-            nn.Conv2d(in_channels=inp_ch, out_channels=64, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage2 = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage3 = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage4 = nn.Sequential(
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-
-        self.stage5 = nn.Sequential(
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.ReLU(True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
+        self.features = nn.Sequential(
+            nn.Conv2d(inp_ch, 64, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(64, 128, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(128, 256, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(256, 512, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.Conv2d(512, 512, 3, padding=1), Act(inplace=True),
+            nn.MaxPool2d(2, 2),
+        )
 
         self.classifier = nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(512 * 1 * 1, 512),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Linear(512, num_classes))
+            nn.Dropout(0.5),
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(512, 512), Act(inplace=True),
+            nn.Linear(512, num_classes),
+        )
+
+        if init_weights:
+            self._init_weights()
 
     def forward(self, x):
-        x = self.stage1(x)
-        x = self.stage2(x)
-        x = self.stage3(x)
-        x = self.stage4(x)
-        x = self.stage5(x)
-        x = self.classifier(x.view(-1, 512 * 1 * 1))
+        x = self.features(x)
+        x = self.classifier(x.view(-1, 512))
         return x
+
+    def _init_weights(self):
+        for m in self.modules():
+            init_weights_(m)
+
+
+class ResBlock(nn.Module):
+    """Basic residual block with optional downsampling."""
+
+    def __init__(self, in_ch, out_ch, stride=1, activation="relu"):
+        super().__init__()
+        Act = get_activation(activation)
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+        self.act1 = Act(inplace=True)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.act2 = Act(inplace=True)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_ch != out_ch:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+
+    def forward(self, x):
+        out = self.act1(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = self.act2(out)
+        return out
+
+
+class ResNet_Small(nn.Module):
+    """Small ResNet for CIFAR-10 (ResNet-18 style, fewer filters)."""
+
+    def __init__(self, inp_ch=3, num_classes=10, activation="relu"):
+        super().__init__()
+        Act = get_activation(activation)
+
+        self.prep = nn.Sequential(
+            nn.Conv2d(inp_ch, 64, 3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            Act(inplace=True),
+        )
+
+        self.layer1 = nn.Sequential(ResBlock(64, 64, activation=activation), ResBlock(64, 64, activation=activation))
+        self.layer2 = nn.Sequential(ResBlock(64, 128, stride=2, activation=activation), ResBlock(128, 128, activation=activation))
+        self.layer3 = nn.Sequential(ResBlock(128, 256, stride=2, activation=activation), ResBlock(256, 256, activation=activation))
+        self.layer4 = nn.Sequential(ResBlock(256, 512, stride=2, activation=activation), ResBlock(512, 512, activation=activation))
+
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(512, num_classes),
+        )
+
+        self._init_weights()
+
+    def forward(self, x):
+        x = self.prep(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.classifier(x)
+        return x
+
+    def _init_weights(self):
+        for m in self.modules():
+            init_weights_(m)
 
 
 if __name__ == '__main__':
-    print(get_number_of_parameters(VGG_A()))
-    print(get_number_of_parameters(VGG_A_BatchNorm()))
-    print(get_number_of_parameters(VGG_A_Light()))
-    print(get_number_of_parameters(VGG_A_Dropout()))
+    print(f"VGG_A: {get_number_of_parameters(VGG_A())}")
+    print(f"VGG_A_BatchNorm: {get_number_of_parameters(VGG_A_BatchNorm())}")
+    print(f"VGG_A_Light: {get_number_of_parameters(VGG_A_Light())}")
+    print(f"VGG_A_Dropout: {get_number_of_parameters(VGG_A_Dropout())}")
+    print(f"ResNet_Small: {get_number_of_parameters(ResNet_Small())}")
